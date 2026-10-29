@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Mantém a carga solicitada e o estado atual de validação de cada docente.
+model ProfessoresAtribuicoes {
+  id                    Int       @id @default(autoincrement())
+  sede                  String    @map("Sede")
+  docente               String    @map("Docente")
+  matricula             String    @map("Matrícula")
+  email                 String    @map("Email")
+  totalHoras            Float     @map("Total_Horas")
+  statusValidacao       String    @default("Pendente") @map("Status_Validacao")
+  observacao            String?   @map("Observacao")
+  dataHoraInsercao      DateTime  @default(now()) @map("Data_Hora_Insercao")
+  dataHoraValidacao     DateTime? @map("Data_Hora_Validacao")
+  usuarioValidador      String?   @map("Usuario_Validador")
+  historicoValidacoes   HistoricoValidacao[]
+
+  @@index([sede, statusValidacao])
+  @@index([matricula])
+  @@unique([sede, matricula])
+  @@map("Professores_Atribuicoes")
+}
+
+// Restringe cada conta de secretaria a uma unidade e a um e-mail autorizado.
+model PermissoesSede {
+  id              Int     @id @default(autoincrement())
+  sedeNome        String  @map("Sede_Nome")
+  emailAutorizado String  @unique @map("Email_Autorizado")
+  usuario         Usuario @relation(fields: [emailAutorizado], references: [email], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([sedeNome, emailAutorizado])
+  @@map("Permissoes_Sede")
+}
+
+// Armazena contas autenticadas e suas relações administrativas.
+model Usuario {
+  id                Int              @id @default(autoincrement())
+  email             String           @unique
+  senhaHash         String
+  nome              String
+  perfil            String
+  ativo             Boolean          @default(true)
+  criadoEm          DateTime         @default(now())
+  permissaoSede     PermissoesSede?
+  sessoes           Sessao[]
+  importacoes       Importacao[]
+
+  @@index([perfil, ativo])
+  @@map("Usuarios")
+}
+
+// Persiste sessões autenticadas sem armazenar o token original.
+model Sessao {
+  id          Int      @id @default(autoincrement())
+  tokenHash   String   @unique
+  usuarioId   Int
+  expiraEm    DateTime
+  criadaEm    DateTime @default(now())
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([expiraEm])
+  @@map("Sessoes")
+}
+
+// Registra quem importou a base e quantas linhas foram processadas.
+model Importacao {
+  id            Int       @id @default(autoincrement())
+  nomeArquivo   String
+  linhasLidas   Int
+  usuarioId     Int?
+  usuarioEmail  String?   @map("Usuario_Email")
+  criadaEm      DateTime  @default(now())
+  usuario       Usuario?  @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([criadaEm])
+  @@map("Importacoes")
+}
+
+// Preserva decisões anteriores quando uma atribuição é validada novamente.
+model HistoricoValidacao {
+  id              Int                    @id @default(autoincrement())
+  atribuicaoId    Int
+  status          String
+  totalHoras      Float
+  observacao      String?
+  dataHora        DateTime               @default(now())
+  usuarioValidador String?
+  atribuicao      ProfessoresAtribuicoes @relation(fields: [atribuicaoId], references: [id], onDelete: Cascade)
+
+  @@index([atribuicaoId, dataHora])
+  @@map("Historico_Validacoes")
+}
