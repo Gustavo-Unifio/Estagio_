@@ -6,7 +6,8 @@ import {
 } from "../auth";
 import { prisma } from "../db";
 import { ApiError } from "../errors";
-import { getAuthenticatedUser } from "../utils";
+import { assignmentIdSchema, validationSchema } from "../schemas";
+import { getAuthenticatedUser, parseSchema } from "../utils";
 
 const router = express.Router();
 
@@ -16,24 +17,11 @@ router.put(
   authenticate,
   requireRole("SECRETARIA"),
   async (req: RequisicaoAutenticada, res) => {
-    const id = Number(req.params.id);
-    const status = req.body?.status;
-    const observation =
-      typeof req.body?.observacao === "string" ? req.body.observacao.trim() : "";
-
-    if (!Number.isSafeInteger(id) || id < 1) {
-      throw new ApiError("Identificador de atribuição inválido.", 400);
-    }
-    if (status !== "Aprovado" && status !== "Rejeitado") {
-      throw new ApiError("Escolha uma decisão válida para a atribuição.", 400);
-    }
-    // A rejeição sempre precisa de uma justificativa não vazia.
-    if (status === "Rejeitado" && !observation) {
-      throw new ApiError("A observação é obrigatória para rejeitar a atribuição.", 400);
-    }
-    if (observation.length > 500) {
-      throw new ApiError("A observação deve ter no máximo 500 caracteres.", 400);
-    }
+    const id = parseSchema(assignmentIdSchema, req.params.id);
+    const { status, observacao: observation } = parseSchema(
+      validationSchema,
+      req.body,
+    );
 
     const authenticatedUser = getAuthenticatedUser(req);
     if (!authenticatedUser.sede) {

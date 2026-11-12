@@ -9,8 +9,18 @@ import {
 } from "../auth";
 import { prisma } from "../db";
 import { ApiError } from "../errors";
+import {
+  administratorIdSchema,
+  assignmentIdSchema,
+  createAdministratorSchema,
+  createSecretarySchema,
+  reopenSchema,
+  secretaryIdSchema,
+  updateAdministratorSchema,
+  updateSecretarySchema,
+} from "../schemas";
 import { parseSpreadsheet } from "../spreadsheet";
-import { getAuthenticatedUser, normalizeAndValidateEmail } from "../utils";
+import { getAuthenticatedUser, parseSchema } from "../utils";
 
 const router = express.Router();
 const maxFileSize = 5 * 1024 * 1024;
@@ -80,17 +90,10 @@ router.post(
   authenticate,
   requireRole("ADMIN"),
   async (req, res) => {
-    const email = normalizeAndValidateEmail(req.body?.email);
-    const nome = typeof req.body?.nome === "string" ? req.body.nome.trim() : "";
-    const sede = typeof req.body?.sede === "string" ? req.body.sede.trim() : "";
-    const password = req.body?.password;
-
-    if (!nome || nome.length > 120 || !sede || sede.length > 160) {
-      throw new ApiError("Informe o nome da pessoa e o nome da unidade.", 400);
-    }
-    if (typeof password !== "string" || password.length < 12 || password.length > 200) {
-      throw new ApiError("A senha deve conter entre 12 e 200 caracteres.", 400);
-    }
+    const { email, nome, sede, password } = parseSchema(
+      createSecretarySchema,
+      req.body,
+    );
     if (await prisma.usuario.findUnique({ where: { email }, select: { id: true } })) {
       throw new ApiError("Já existe uma conta com este e-mail.", 409);
     }
@@ -124,16 +127,10 @@ router.post(
   authenticate,
   requireRole("ADMIN"),
   async (req, res) => {
-    const email = normalizeAndValidateEmail(req.body?.email);
-    const nome = typeof req.body?.nome === "string" ? req.body.nome.trim() : "";
-    const password = req.body?.password;
-
-    if (!nome || nome.length > 120) {
-      throw new ApiError("Informe o nome do administrador.", 400);
-    }
-    if (typeof password !== "string" || password.length < 12 || password.length > 200) {
-      throw new ApiError("A senha deve conter entre 12 e 200 caracteres.", 400);
-    }
+    const { email, nome, password } = parseSchema(
+      createAdministratorSchema,
+      req.body,
+    );
     if (await prisma.usuario.findUnique({ where: { email }, select: { id: true } })) {
       throw new ApiError("Já existe uma conta com este e-mail.", 409);
     }
@@ -166,27 +163,15 @@ router.put(
   authenticate,
   requireRole("ADMIN"),
   async (req: RequisicaoAutenticada, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isSafeInteger(id) || id < 1) {
-      throw new ApiError("Identificador de administrador inválido.", 400);
-    }
+    const id = parseSchema(administratorIdSchema, req.params.id);
     if (id === getAuthenticatedUser(req).id) {
       throw new ApiError("Não é possível editar a própria conta nesta tela.", 409);
     }
 
-    const email = normalizeAndValidateEmail(req.body?.email);
-    const nome = typeof req.body?.nome === "string" ? req.body.nome.trim() : "";
-    const password = req.body?.password;
-    if (!nome || nome.length > 120) {
-      throw new ApiError("Informe o nome do administrador.", 400);
-    }
-    if (
-      password !== undefined &&
-      password !== "" &&
-      (typeof password !== "string" || password.length < 12 || password.length > 200)
-    ) {
-      throw new ApiError("A nova senha deve conter entre 12 e 200 caracteres.", 400);
-    }
+    const { email, nome, password } = parseSchema(
+      updateAdministratorSchema,
+      req.body,
+    );
 
     const existing = await prisma.usuario.findUnique({ where: { id } });
     if (!existing || existing.perfil !== "ADMIN") {
@@ -234,10 +219,7 @@ router.delete(
   authenticate,
   requireRole("ADMIN"),
   async (req: RequisicaoAutenticada, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isSafeInteger(id) || id < 1) {
-      throw new ApiError("Identificador de administrador inválido.", 400);
-    }
+    const id = parseSchema(administratorIdSchema, req.params.id);
     if (id === getAuthenticatedUser(req).id) {
       throw new ApiError("Não é possível excluir a própria conta.", 409);
     }
@@ -272,26 +254,11 @@ router.put(
   authenticate,
   requireRole("ADMIN"),
   async (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isSafeInteger(id) || id < 1) {
-      throw new ApiError("Identificador de secretaria inválido.", 400);
-    }
-
-    const email = normalizeAndValidateEmail(req.body?.email);
-    const nome = typeof req.body?.nome === "string" ? req.body.nome.trim() : "";
-    const sede = typeof req.body?.sede === "string" ? req.body.sede.trim() : "";
-    const password = req.body?.password;
-
-    if (!nome || nome.length > 120 || !sede || sede.length > 160) {
-      throw new ApiError("Informe o nome da pessoa e o nome da unidade.", 400);
-    }
-    if (
-      password !== undefined &&
-      password !== "" &&
-      (typeof password !== "string" || password.length < 12 || password.length > 200)
-    ) {
-      throw new ApiError("A nova senha deve conter entre 12 e 200 caracteres.", 400);
-    }
+    const id = parseSchema(secretaryIdSchema, req.params.id);
+    const { email, nome, sede, password } = parseSchema(
+      updateSecretarySchema,
+      req.body,
+    );
 
     const existing = await prisma.usuario.findUnique({
       where: { id },
@@ -344,10 +311,7 @@ router.delete(
   authenticate,
   requireRole("ADMIN"),
   async (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isSafeInteger(id) || id < 1) {
-      throw new ApiError("Identificador de secretaria inválido.", 400);
-    }
+    const id = parseSchema(secretaryIdSchema, req.params.id);
 
     const existing = await prisma.usuario.findUnique({
       where: { id },
@@ -441,14 +405,8 @@ router.put(
   authenticate,
   requireRole("ADMIN"),
   async (req, res) => {
-    const id = Number(req.params.id);
-    const totalHoras = Number(req.body?.totalHoras);
-    if (!Number.isSafeInteger(id) || id < 1) {
-      throw new ApiError("Identificador de atribuição inválido.", 400);
-    }
-    if (!Number.isFinite(totalHoras) || totalHoras <= 0 || totalHoras > 40) {
-      throw new ApiError("Informe uma carga solicitada maior que 0 e até 40 horas.", 400);
-    }
+    const id = parseSchema(assignmentIdSchema, req.params.id);
+    const { totalHoras } = parseSchema(reopenSchema, req.body);
 
     await prisma.$transaction(async (transaction) => {
       const assignment = await transaction.professoresAtribuicoes.findUnique({

@@ -10,8 +10,9 @@ import {
 } from "../auth";
 import { prisma } from "../db";
 import { ApiError } from "../errors";
+import { loginSchema } from "../schemas";
 import { listAssignmentsForUser } from "../services/atribuicoes";
-import { getAuthenticatedUser, normalizeAndValidateEmail } from "../utils";
+import { getAuthenticatedUser, parseSchema } from "../utils";
 
 const router = express.Router();
 
@@ -31,7 +32,10 @@ router.get("/api/health", (_req, res) => {
 
 // Autentica a conta, verifica seu perfil e cria uma sessão protegida.
 router.post("/api/auth/login", loginLimiter, async (req, res) => {
-  const email = normalizeAndValidateEmail(req.body?.email);
+  const { email } = parseSchema(loginSchema, {
+    email: req.body?.email,
+    password: req.body?.password,
+  });
   const password = req.body?.password;
   if (typeof password !== "string" || password.length === 0 || password.length > 200) {
     throw new ApiError("E-mail ou senha inválidos.", 401);

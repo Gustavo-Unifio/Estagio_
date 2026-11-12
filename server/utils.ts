@@ -1,5 +1,18 @@
 import type { RequisicaoAutenticada } from "./auth";
 import { ApiError } from "./errors";
+import type { z } from "zod";
+
+// Valida dados com Zod e retorna a primeira mensagem de erro ao cliente.
+export function parseSchema<T extends z.ZodType>(
+  schema: T,
+  value: unknown,
+): z.output<T> {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    throw new ApiError(result.error.issues[0]?.message ?? "Dados inválidos.", 400);
+  }
+  return result.data;
+}
 
 // Valida a origem das operações que podem alterar dados.
 export function isAllowedRequestOrigin(origin: string, host: string | undefined) {
