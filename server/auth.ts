@@ -20,6 +20,15 @@ export type RequisicaoAutenticada = Request & {
 export const cookieName = "carga_docente_session";
 export const sessionDurationMs = 8 * 60 * 60 * 1000;
 
+// Remove sessões expiradas sem interromper a execução da API em caso de falha.
+export async function cleanupExpiredSessions() {
+  try {
+    await prisma.sessao.deleteMany({ where: { expiraEm: { lt: new Date() } } });
+  } catch (error) {
+    console.error("Erro ao limpar sessões expiradas:", error);
+  }
+}
+
 // Armazena somente o resumo do token para evitar persistir credenciais de sessão.
 function hashSessionToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
