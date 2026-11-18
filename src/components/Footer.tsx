@@ -3,8 +3,7 @@ export default function Footer() {
   return (
     <footer className="site-footer">
       <div className="page-container">
-        Centro Paula Souza <span aria-hidden="true">·</span> Gestão de carga horária
-        docente
+        Centro Paula Souza <span aria-hidden="true">·</span> Atribuição EAD
       </div>
     </footer>
   );

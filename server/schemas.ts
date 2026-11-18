@@ -154,3 +154,12 @@ export const assignmentIdSchema = z.coerce.number().refine(
   (value) => Number.isSafeInteger(value) && value >= 1,
   { error: "Identificador de atribuição inválido." },
 );
+
+// Valida a sede opcional usada na exportação administrativa.
+export const exportSedeSchema = z.preprocess(
+  (value) => (typeof value === "string" ? value.trim() : value),
+  z.string({ error: "Informe uma sede válida." })
+    .min(1, { error: "Informe uma sede válida." })
+    .max(160, { error: "A sede deve ter no máximo 160 caracteres." })
+    .optional(),
+);

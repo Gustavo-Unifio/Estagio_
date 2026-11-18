@@ -11,6 +11,19 @@ export type LinhaImportada = {
   totalHoras: number;
 };
 
+export type LinhaExportada = {
+  id: number;
+  sede: string;
+  docente: string;
+  matricula: string;
+  email: string;
+  totalHoras: number;
+  status: string;
+  observacao: string | null;
+  dataHoraValidacao: Date | null;
+  usuarioValidador: string | null;
+};
+
 // Limita o volume importado e as linhas examinadas em busca do cabeçalho.
 const maxRows = 5000;
 const headerSearchRows = 30;
@@ -21,6 +34,148 @@ const headerLabels = ["Sede", "Docente", "Matrícula", "EMAIL", "Total Horas"];
 
 XLSX.set_cptable(codepages);
 
+const assignmentExportCollator = new Intl.Collator("pt-BR", {
+  sensitivity: "base",
+  numeric: true,
+});
+
+// Mantém textos exportados como células de texto, inclusive os que começam com "=".
+function textCell(value: string) {
+  return { t: "s" as const, v: value };
+}
+
+// Cria uma célula numérica para preservar horas como número na planilha.
+function numberCell(value: number) {
+  return { t: "n" as const, v: value };
+}
+
+// Formata datas de validação no padrão legível usado no arquivo exportado.
+function formatExportDate(value: Date | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// Gera as abas de atribuições e resumo para o arquivo administrativo.
+export function createAssignmentsWorkbook(assignments: LinhaExportada[]) {
+  const orderedAssignments = [...assignments].sort((first, second) => {
+    const seatResult = assignmentExportCollator.compare(first.sede, second.sede);
+    if (seatResult !== 0) return seatResult;
+    const teacherResult = assignmentExportCollator.compare(first.docente, second.docente);
+    if (teacherResult !== 0) return teacherResult;
+    const enrollmentResult = assignmentExportCollator.compare(
+      first.matricula,
+      second.matricula,
+    );
+    return enrollmentResult || first.id - second.id;
+  });
+
+  const assignmentRows = [
+    [
+      textCell("Sede"),
+      textCell("Docente"),
+      textCell("Matrícula"),
+      textCell("E-mail"),
+      textCell("Horas solicitadas"),
+      textCell("Status"),
+      textCell("Observação"),
+      textCell("Validada em"),
+      textCell("Validada por"),
+    ],
+    ...orderedAssignments.map((assignment) => [
+      textCell(assignment.sede),
+      textCell(assignment.docente),
+      textCell(assignment.matricula),
+      textCell(assignment.email),
+      numberCell(assignment.totalHoras),
+      textCell(assignment.status),
+      textCell(assignment.observacao ?? ""),
+      textCell(formatExportDate(assignment.dataHoraValidacao)),
+      textCell(assignment.usuarioValidador ?? ""),
+    ]),
+  ];
+
+  const summaryBySeat = new Map<
+    string,
+    { pendingCount: number; pendingHours: number; approvedCount: number; approvedHours: number; rejectedCount: number; rejectedHours: number }
+  >();
+  for (const assignment of orderedAssignments) {
+    const summary = summaryBySeat.get(assignment.sede) ?? {
+      pendingCount: 0,
+      pendingHours: 0,
+      approvedCount: 0,
+      approvedHours: 0,
+      rejectedCount: 0,
+      rejectedHours: 0,
+    };
+    if (assignment.status === "Pendente") {
+      summary.pendingCount += 1;
+      summary.pendingHours += assignment.totalHoras;
+    } else if (assignment.status === "Aprovado") {
+      summary.approvedCount += 1;
+      summary.approvedHours += assignment.totalHoras;
+    } else if (assignment.status === "Rejeitado") {
+      summary.rejectedCount += 1;
+      summary.rejectedHours += assignment.totalHoras;
+    }
+    summaryBySeat.set(assignment.sede, summary);
+  }
+
+  const summaryRows = [
+    [
+      textCell("Sede"),
+      textCell("Pendentes (qtd.)"),
+      textCell("Pendentes (horas)"),
+      textCell("Aprovadas (qtd.)"),
+      textCell("Aprovadas (horas)"),
+      textCell("Rejeitadas (qtd.)"),
+      textCell("Rejeitadas (horas)"),
+    ],
+    ...[...summaryBySeat.entries()].map(([sede, summary]) => [
+      textCell(sede),
+      numberCell(summary.pendingCount),
+      numberCell(summary.pendingHours),
+      numberCell(summary.approvedCount),
+      numberCell(summary.approvedHours),
+      numberCell(summary.rejectedCount),
+      numberCell(summary.rejectedHours),
+    ]),
+  ];
+  const total = [...summaryBySeat.values()].reduce(
+    (result, summary) => ({
+      pendingCount: result.pendingCount + summary.pendingCount,
+      pendingHours: result.pendingHours + summary.pendingHours,
+      approvedCount: result.approvedCount + summary.approvedCount,
+      approvedHours: result.approvedHours + summary.approvedHours,
+      rejectedCount: result.rejectedCount + summary.rejectedCount,
+      rejectedHours: result.rejectedHours + summary.rejectedHours,
+    }),
+    {
+      pendingCount: 0,
+      pendingHours: 0,
+      approvedCount: 0,
+      approvedHours: 0,
+      rejectedCount: 0,
+      rejectedHours: 0,
+    },
+  );
+  summaryRows.push([
+    textCell("Total geral"),
+    numberCell(total.pendingCount),
+    numberCell(total.pendingHours),
+    numberCell(total.approvedCount),
+    numberCell(total.approvedHours),
+    numberCell(total.rejectedCount),
+    numberCell(total.rejectedHours),
+  ]);
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(assignmentRows), "Atribuições");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(summaryRows), "Resumo");
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
+}
+
 // Guarda uma aba que contém cabeçalho válido e as posições das colunas.
 type HeaderCandidate = {
   name: string;
@@ -30,7 +185,7 @@ type HeaderCandidate = {
 };
 
 // Normaliza cabeçalhos para ignorar diferenças de acento, caixa e separadores.
-function normalizeColumnHeader(value: unknown) {
+export function normalizeColumnHeader(value: unknown) {
   return String(value ?? "")
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")

@@ -4,6 +4,7 @@ import AssignmentTable from "../components/AssignmentTable";
 import Brand from "../components/Brand";
 import Footer from "../components/Footer";
 import SummaryMetric from "../components/SummaryMetric";
+import type { CriterioOrdenacao, DirecaoOrdenacao } from "../utils/format";
 import type {
   Administrador,
   Atribuicao,
@@ -23,6 +24,10 @@ type AdminPanelProps = {
   selectedFile: File | null;
   adminSedeFilter: string;
   adminStatusFilter: Status | "Todas";
+  sortCriterion: CriterioOrdenacao;
+  sortDirection: DirecaoOrdenacao;
+  exporting: boolean;
+  secretaryImportFile: File | null;
   visibleAssignments: Atribuicao[];
   availableSedes: string[];
   pendingCount: number;
@@ -44,6 +49,13 @@ type AdminPanelProps = {
   setSelectedFile: (value: File | null) => void;
   setAdminSedeFilter: (value: string) => void;
   setAdminStatusFilter: (value: Status | "Todas") => void;
+  onSortCriterionChange: (criterion: CriterioOrdenacao) => void;
+  onSortDirectionChange: () => void;
+  onExportAll: () => void;
+  onExportSeat: () => void;
+  setSecretaryImportFile: (value: File | null) => void;
+  onImportSecretaryFile: (event: FormEvent<HTMLFormElement>) => void;
+  onDownloadSecretaryTemplate: () => void;
   setResetConfirmation: (value: boolean) => void;
   setSpreadsheetError: (value: string) => void;
   setReopenAssignment: Dispatch<SetStateAction<Atribuicao | null>>;
@@ -77,6 +89,10 @@ export default function AdminPanel({
   selectedFile,
   adminSedeFilter,
   adminStatusFilter,
+  sortCriterion,
+  sortDirection,
+  exporting,
+  secretaryImportFile,
   visibleAssignments,
   availableSedes,
   pendingCount,
@@ -98,6 +114,13 @@ export default function AdminPanel({
   setSelectedFile,
   setAdminSedeFilter,
   setAdminStatusFilter,
+  onSortCriterionChange,
+  onSortDirectionChange,
+  onExportAll,
+  onExportSeat,
+  setSecretaryImportFile,
+  onImportSecretaryFile,
+  onDownloadSecretaryTemplate,
   setResetConfirmation,
   setSpreadsheetError,
   setReopenAssignment,
@@ -242,7 +265,39 @@ export default function AdminPanel({
             setAdminSedeFilter("");
             setAdminStatusFilter("Todas");
           }}
+          sortCriterion={sortCriterion}
+          sortDirection={sortDirection}
+          onSortCriterionChange={onSortCriterionChange}
+          onSortDirectionChange={onSortDirectionChange}
+          showSeatSort
         />
+        <div className="export-actions" aria-label="Exportação de atribuições">
+          <button
+            className="button button--outline"
+            type="button"
+            onClick={onExportAll}
+            disabled={busy || exporting}
+          >
+            {exporting ? "Exportando…" : "Exportar todas as sedes"}
+          </button>
+          <button
+            className="button button--outline"
+            type="button"
+            onClick={onExportSeat}
+            disabled={!adminSedeFilter || busy || exporting}
+            title={
+              adminSedeFilter
+                ? `Exportar sede: ${adminSedeFilter}`
+                : "Selecione uma sede para exportar"
+            }
+          >
+            {exporting
+              ? "Exportando…"
+              : adminSedeFilter
+                ? `Exportar sede: ${adminSedeFilter}`
+                : "Exportar sede selecionada"}
+          </button>
+        </div>
         <p className="filter-result-count" aria-live="polite">
           Exibindo {visibleAssignments.length} de {assignments.length} atribuições.
         </p>
@@ -334,6 +389,54 @@ export default function AdminPanel({
               </button>
             )}
           </form>
+          <section
+            className="secretary-import-panel"
+            aria-labelledby="secretary-import-title"
+          >
+            <div>
+              <span className="eyebrow">IMPORTAÇÃO EM LOTE</span>
+              <h3 id="secretary-import-title">Importar secretarias por planilha</h3>
+              <p>
+                Use as colunas Nome, E-mail, Sede e Senha. O limite é de 100
+                contas por arquivo.
+              </p>
+              <p className="field__hint">
+                O arquivo contém senhas. Apague-o depois de importar.
+              </p>
+            </div>
+            <form
+              className="upload-form"
+              onSubmit={(event) => onImportSecretaryFile(event)}
+            >
+              <label className="field field--file">
+                <span className="visually-hidden">Arquivo de secretarias</span>
+                <input
+                  type="file"
+                  accept=".xls,.xlsx,.ods,.csv"
+                  onChange={(event) =>
+                    setSecretaryImportFile(event.currentTarget.files?.[0] ?? null)
+                  }
+                  disabled={busy}
+                  required
+                />
+              </label>
+              <button
+                className="button button--primary"
+                type="submit"
+                disabled={!secretaryImportFile || busy}
+              >
+                {busy ? "Importando…" : "Importar"}
+              </button>
+              <button
+                className="button button--text"
+                type="button"
+                onClick={onDownloadSecretaryTemplate}
+                disabled={busy}
+              >
+                Baixar modelo
+              </button>
+            </form>
+          </section>
           <div className="table-card account-table">
             <div className="table-scroll">
               <table>

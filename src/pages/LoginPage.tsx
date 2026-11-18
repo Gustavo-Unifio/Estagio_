@@ -21,21 +21,20 @@ export default function LoginPage({
       <header className="site-header">
         <div className="site-header__inner">
           <Brand />
-          <span className="header-caption">Sistema de gestão acadêmica</span>
+          <span className="header-caption">Atribuição EAD</span>
         </div>
       </header>
       <main className="login-layout">
         <section className="login-intro" aria-labelledby="login-title">
-          <span className="eyebrow">GESTÃO ACADÊMICA</span>
+          <span className="eyebrow">Atribuição EAD</span>
           <h1 id="login-title">Atribuição e validação de carga horária</h1>
           <p>
-            Consulte as atribuições docentes e valide a disponibilidade de
-            carga horária semanal da sua unidade.
+            Consulte e valide as atribuições de carga horária dos docentes da sua unidade.
           </p>
           <div className="login-rule">
             <span className="login-rule__number">40h</span>
             <span className="login-rule__copy">
-              Limite de carga horária semanal por atribuição
+              Limite de carga horária semanal.
             </span>
           </div>
         </section>

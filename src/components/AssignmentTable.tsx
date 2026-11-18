@@ -18,7 +18,12 @@ export default function AssignmentTable({
 
   return (
     <div className="table-card">
-      <div className="table-scroll">
+      <div
+        className="table-scroll"
+        tabIndex={0}
+        role="region"
+        aria-label="Tabela de atribuições"
+      >
         <table>
           <thead>
             <tr>

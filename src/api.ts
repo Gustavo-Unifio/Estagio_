@@ -49,6 +49,38 @@ export async function api<T>(
   return body as T;
 }
 
+// Realiza download autenticado e extrai o nome informado no Content-Disposition.
+export async function apiDownload(path: string, fallbackFileName: string) {
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new ApiError(
+      "Não foi possível conectar à aplicação. Confirme se o servidor está em execução.",
+      0,
+    );
+  }
+
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null);
+    const message =
+      typeof body === "object" &&
+      body !== null &&
+      "error" in body &&
+      typeof body.error === "string"
+        ? body.error
+        : "Não foi possível exportar as atribuições.";
+    throw new ApiError(message, response.status);
+  }
+
+  const contentDisposition = response.headers.get("Content-Disposition");
+  const fileName =
+    contentDisposition?.match(/filename="([^"]+)"/i)?.[1] ?? fallbackFileName;
+  return { blob: await response.blob(), fileName };
+}
+
 // Resume falhas de importação e orienta a correção e o novo envio do arquivo.
 export function getSpreadsheetErrorMessage(cause: unknown) {
   const reason =

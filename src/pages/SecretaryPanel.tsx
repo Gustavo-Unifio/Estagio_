@@ -3,8 +3,10 @@ import AssignmentFilters from "../components/AssignmentFilters";
 import AssignmentTable from "../components/AssignmentTable";
 import Brand from "../components/Brand";
 import Footer from "../components/Footer";
+import RodapeTotalHoras from "../components/RodapeTotalHoras";
 import SummaryMetric from "../components/SummaryMetric";
 import type { Atribuicao, RevisaoAtribuicao, Status, Usuario } from "../types";
+import type { CriterioOrdenacao, DirecaoOrdenacao } from "../utils/format";
 import { formatHours } from "../utils/format";
 
 type SecretaryPanelProps = {
@@ -14,6 +16,8 @@ type SecretaryPanelProps = {
   approvedCount: number;
   visibleAssignments: Atribuicao[];
   secretaryStatusFilter: Status | "Todas";
+  sortCriterion: CriterioOrdenacao;
+  sortDirection: DirecaoOrdenacao;
   busy: boolean;
   error: string;
   feedback: string;
@@ -21,6 +25,8 @@ type SecretaryPanelProps = {
   observation: string;
   onSignOut: () => void;
   onStatusChange: (status: Status | "Todas") => void;
+  onSortCriterionChange: (criterion: CriterioOrdenacao) => void;
+  onSortDirectionChange: () => void;
   onReview: (assignment: Atribuicao, status: "Aprovado" | "Rejeitado") => void;
   onSaveReview: (event: FormEvent<HTMLFormElement>) => void;
   onObservationChange: (value: string) => void;
@@ -35,6 +41,8 @@ export default function SecretaryPanel({
   approvedCount,
   visibleAssignments,
   secretaryStatusFilter,
+  sortCriterion,
+  sortDirection,
   busy,
   error,
   feedback,
@@ -42,6 +50,8 @@ export default function SecretaryPanel({
   observation,
   onSignOut,
   onStatusChange,
+  onSortCriterionChange,
+  onSortDirectionChange,
   onReview,
   onSaveReview,
   onObservationChange,
@@ -109,6 +119,10 @@ export default function SecretaryPanel({
           status={secretaryStatusFilter}
           onStatusChange={onStatusChange}
           onClear={() => onStatusChange("Todas")}
+          sortCriterion={sortCriterion}
+          sortDirection={sortDirection}
+          onSortCriterionChange={onSortCriterionChange}
+          onSortDirectionChange={onSortDirectionChange}
         />
         <p className="filter-result-count" aria-live="polite">
           Exibindo {visibleAssignments.length} de {assignments.length} atribuições.
@@ -116,6 +130,11 @@ export default function SecretaryPanel({
         <AssignmentTable
           assignments={visibleAssignments}
           onReview={onReview}
+        />
+        <RodapeTotalHoras
+          assignments={assignments}
+          visibleAssignments={visibleAssignments}
+          statusFilter={secretaryStatusFilter}
         />
         <p className="hours-note">
           Limite de referência por atribuição: <strong>40 horas semanais</strong>.

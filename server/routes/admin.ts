@@ -14,12 +14,17 @@ import {
   assignmentIdSchema,
   createAdministratorSchema,
   createSecretarySchema,
+  exportSedeSchema,
   reopenSchema,
   secretaryIdSchema,
   updateAdministratorSchema,
   updateSecretarySchema,
 } from "../schemas";
-import { parseSpreadsheet } from "../spreadsheet";
+import { createAssignmentsWorkbook, parseSpreadsheet } from "../spreadsheet";
+import {
+  parseSecretarySpreadsheet,
+  type LinhaSecretariaImportada,
+} from "../secretary-spreadsheet";
 import { getAuthenticatedUser, parseSchema } from "../utils";
 
 const router = express.Router();
@@ -31,6 +36,192 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: maxFileSize, files: 1 },
 });
+
+// Converte o nome da sede em um trecho seguro para o nome do arquivo.
+function createExportSlug(value: string) {
+  const slug = value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return slug || "sede";
+}
+
+// Converte o campo validado em um nome de coluna compreensível para o admin.
+function getSecretaryImportColumn(field: string) {
+  return {
+    nome: "Nome",
+    email: "E-mail",
+    sede: "Sede",
+    password: "Senha",
+  }[field] ?? "Dados";
+}
+
+// Limita a mensagem aos primeiros vinte problemas encontrados na planilha.
+function formatSecretaryImportErrors(errors: string[]) {
+  const visibleErrors = errors.slice(0, 20);
+  const remaining = errors.length - visibleErrors.length;
+  return [
+    "A importação foi cancelada. Corrija os erros:",
+    ...visibleErrors,
+    ...(remaining > 0 ? [`E mais ${remaining} erro(s) não exibido(s).`] : []),
+  ].join("\n");
+}
+
+// Valida linhas com o mesmo schema usado no cadastro manual.
+async function validateSecretaryImportRows(rows: LinhaSecretariaImportada[]) {
+  const errors: string[] = [];
+  const validRows: Array<{
+    linha: number;
+    nome: string;
+    email: string;
+    sede: string;
+    password: string;
+  }> = [];
+  const emailRows = new Map<string, number>();
+
+  for (const row of rows) {
+    const parsed = createSecretarySchema.safeParse({
+      nome: row.nome,
+      email: row.email,
+      sede: row.sede,
+      password: row.password,
+    });
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        const field = String(issue.path[0] ?? "");
+        errors.push(
+          `Linha ${row.linha} (${getSecretaryImportColumn(field)}): ${issue.message}`,
+        );
+      }
+      continue;
+    }
+
+    const previousLine = emailRows.get(parsed.data.email);
+    if (previousLine !== undefined) {
+      errors.push(
+        `Linha ${row.linha} (E-mail): e-mail repetido na planilha (linha ${previousLine}).`,
+      );
+    } else {
+      emailRows.set(parsed.data.email, row.linha);
+    }
+    validRows.push({ linha: row.linha, ...parsed.data });
+  }
+
+  const existingEmails = await prisma.usuario.findMany({
+    where: { email: { in: [...emailRows.keys()] } },
+    select: { email: true },
+  });
+  const existingEmailSet = new Set(existingEmails.map((user) => user.email));
+  for (const row of validRows) {
+    if (existingEmailSet.has(row.email)) {
+      errors.push(`Linha ${row.linha} (E-mail): e-mail já cadastrado no sistema.`);
+    }
+  }
+
+  return { errors, validRows };
+}
+
+// Exporta todas as atribuições ou somente as da sede selecionada.
+router.get(
+  "/api/admin/atribuicoes/exportar",
+  authenticate,
+  requireRole("ADMIN"),
+  async (req, res) => {
+    const sede = parseSchema(exportSedeSchema, req.query.sede);
+    const assignments = await prisma.professoresAtribuicoes.findMany({
+      where: sede ? { sede } : undefined,
+      orderBy: [{ sede: "asc" }, { docente: "asc" }],
+    });
+    if (sede && assignments.length === 0) {
+      throw new ApiError("Sede não encontrada.", 404);
+    }
+
+    const workbook = createAssignmentsWorkbook(
+      assignments.map((assignment) => ({
+        id: assignment.id,
+        sede: assignment.sede,
+        docente: assignment.docente,
+        matricula: assignment.matricula,
+        email: assignment.email,
+        totalHoras: assignment.totalHoras,
+        status: assignment.statusValidacao,
+        observacao: assignment.observacao,
+        dataHoraValidacao: assignment.dataHoraValidacao,
+        usuarioValidador: assignment.usuarioValidador,
+      })),
+    );
+    const date = new Date().toISOString().slice(0, 10);
+    const scope = sede ? createExportSlug(sede) : "todas";
+    const fileName = `atribuicoes-${scope}-${date}.xlsx`;
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.send(workbook);
+  },
+);
+
+// Importa contas de secretaria atomicamente após validar todas as linhas.
+router.post(
+  "/api/admin/secretarias/importar",
+  authenticate,
+  requireRole("ADMIN"),
+  upload.single("arquivo"),
+  async (req, res) => {
+    if (!req.file) throw new ApiError("Selecione uma planilha para importar.", 400);
+    const extension = extname(req.file.originalname).toLowerCase();
+    if (!allowedExtensions.has(extension)) {
+      throw new ApiError("Formato não permitido. Use .xls, .xlsx, .ods ou .csv.", 400);
+    }
+
+    let rows: LinhaSecretariaImportada[];
+    try {
+      rows = parseSecretarySpreadsheet(req.file.buffer, req.file.originalname);
+    } catch (error) {
+      throw new ApiError(
+        error instanceof Error ? error.message : "Não foi possível processar a planilha.",
+        400,
+      );
+    }
+
+    const { errors, validRows } = await validateSecretaryImportRows(rows);
+    if (errors.length) {
+      throw new ApiError(formatSecretaryImportErrors(errors), 400);
+    }
+
+    const hashedRows = await Promise.all(
+      validRows.map(async (row) => ({
+        ...row,
+        senhaHash: await hash(row.password, 12),
+      })),
+    );
+    await prisma.$transaction(async (transaction) => {
+      for (const row of hashedRows) {
+        await transaction.usuario.create({
+          data: {
+            email: row.email,
+            nome: row.nome,
+            senhaHash: row.senhaHash,
+            perfil: "SECRETARIA",
+            permissaoSede: {
+              create: {
+                sedeNome: row.sede,
+              },
+            },
+          },
+        });
+      }
+    });
+
+    res.status(201).json({
+      criadas: hashedRows.length,
+      mensagem: `${hashedRows.length} conta(s) de secretaria importada(s) com sucesso.`,
+    });
+  },
+);
 
 // Lista os acessos de secretaria gerenciados pelo administrador.
 router.get("/api/admin/secretarias", authenticate, requireRole("ADMIN"), async (_req, res) => {

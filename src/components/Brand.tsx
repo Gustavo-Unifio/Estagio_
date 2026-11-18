@@ -8,7 +8,7 @@ export default function Brand() {
         alt="Centro Paula Souza"
       />
       <span className="brand__divider" aria-hidden="true" />
-      <span className="brand__product">Carga Docente</span>
+      <span className="brand__product">Carga horária docente</span>
     </a>
   );
 }

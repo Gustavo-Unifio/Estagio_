@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, ApiError, getSpreadsheetErrorMessage } from "./api";
+import { api, apiDownload, ApiError, getSpreadsheetErrorMessage } from "./api";
 import type {
   Administrador,
   Atribuicao,
@@ -15,6 +15,11 @@ import Brand from "./components/Brand";
 import AdminPanel from "./pages/AdminPanel";
 import LoginPage from "./pages/LoginPage";
 import SecretaryPanel from "./pages/SecretaryPanel";
+import {
+  ordenarAtribuicoes,
+  type CriterioOrdenacao,
+  type DirecaoOrdenacao,
+} from "./utils/format";
 
 // Cria um formulário vazio sem compartilhar referências entre atualizações.
 function createEmptySecretaryForm(): FormularioSecretaria {
@@ -38,16 +43,20 @@ function App() {
   const [adminSedeFilter, setAdminSedeFilter] = useState("");
   const [adminStatusFilter, setAdminStatusFilter] = useState<Status | "Todas">("Todas");
   const [secretaryStatusFilter, setSecretaryStatusFilter] = useState<Status | "Todas">("Todas");
+  const [sortCriterion, setSortCriterion] = useState<CriterioOrdenacao>("docente");
+  const [sortDirection, setSortDirection] = useState<DirecaoOrdenacao>("asc");
   const [loginError, setLoginError] = useState("");
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
   const [spreadsheetError, setSpreadsheetError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [review, setReview] = useState<RevisaoAtribuicao | null>(null);
   const [reopenAssignment, setReopenAssignment] = useState<Atribuicao | null>(null);
   const [reopenHours, setReopenHours] = useState("");
   const [observation, setObservation] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [secretaryImportFile, setSecretaryImportFile] = useState<File | null>(null);
   const [resetConfirmation, setResetConfirmation] = useState(false);
   const [editingSecretaryId, setEditingSecretaryId] = useState<number | null>(null);
   const [deletingSecretary, setDeletingSecretary] = useState<Secretaria | null>(null);
@@ -119,20 +128,32 @@ function App() {
   );
   const unitsCount = availableSedes.length;
   const visibleAssignments = useMemo(() => {
-    if (user?.perfil === "ADMIN") {
-      return assignments.filter(
+    const filteredAssignments = user?.perfil === "ADMIN"
+      ? assignments.filter(
         (assignment) =>
           (!adminSedeFilter || assignment.sede === adminSedeFilter) &&
           (adminStatusFilter === "Todas" || assignment.status === adminStatusFilter),
-      );
-    }
+        )
+      : assignments.filter(
+          (assignment) =>
+            secretaryStatusFilter === "Todas" ||
+            assignment.status === secretaryStatusFilter,
+        );
 
-    return assignments.filter(
-      (assignment) =>
-        secretaryStatusFilter === "Todas" ||
-        assignment.status === secretaryStatusFilter,
-    );
-  }, [adminSedeFilter, adminStatusFilter, assignments, secretaryStatusFilter, user]);
+    const effectiveCriterion =
+      user?.perfil === "SECRETARIA" && sortCriterion === "sede"
+        ? "docente"
+        : sortCriterion;
+    return ordenarAtribuicoes(filteredAssignments, effectiveCriterion, sortDirection);
+  }, [
+    adminSedeFilter,
+    adminStatusFilter,
+    assignments,
+    secretaryStatusFilter,
+    sortCriterion,
+    sortDirection,
+    user,
+  ]);
 
   // Autentica o usuário e carrega os dados do perfil retornado pela API.
   async function signIn(event: React.FormEvent<HTMLFormElement>) {
@@ -199,6 +220,33 @@ function App() {
   async function reloadData() {
     if (!user) return;
     await loadDashboard(user.perfil);
+  }
+
+  // Solicita a planilha ao servidor e inicia o download no navegador.
+  async function exportAssignments(sede?: string) {
+    setError("");
+    setExporting(true);
+    const scope = sede ? `-${sede}` : "-todas";
+    const fallbackFileName = `atribuicoes${scope}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    try {
+      const query = sede ? `?sede=${encodeURIComponent(sede)}` : "";
+      const { blob, fileName } = await apiDownload(
+        `/api/admin/atribuicoes/exportar${query}`,
+        fallbackFileName,
+      );
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (cause: unknown) {
+      setError(cause instanceof ApiError ? cause.message : "Não foi possível exportar as atribuições.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   // Envia uma planilha para validação e substituição da base atual.
@@ -273,6 +321,56 @@ function App() {
     } finally {
       setBusy(false);
     }
+
+  }
+
+  // Importa contas de secretaria e atualiza a lista após a transação concluída.
+  async function importSecretaryFile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    if (!secretaryImportFile) {
+      setError("Selecione uma planilha de secretarias antes de importar.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    setFeedback("");
+    try {
+      const formData = new FormData();
+      formData.append("arquivo", secretaryImportFile);
+      const response = await api<{ criadas: number; mensagem: string }>(
+        "/api/admin/secretarias/importar",
+        { method: "POST", body: formData },
+      );
+      setSecretaryImportFile(null);
+      formElement.reset();
+      await reloadData();
+      setFeedback(response.mensagem);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível importar as contas de secretaria.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Baixa um modelo CSV sem dados de exemplo ou senhas reais.
+  function downloadSecretaryTemplate() {
+    const blob = new Blob(["Nome;E-mail;Sede;Senha"], {
+      type: "text/csv;charset=utf-8",
+    });
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = "modelo-secretarias.csv";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
   }
 
   // Preenche o formulário com os dados do acesso selecionado.
@@ -518,6 +616,10 @@ function App() {
       selectedFile={selectedFile}
       adminSedeFilter={adminSedeFilter}
       adminStatusFilter={adminStatusFilter}
+      sortCriterion={sortCriterion}
+      sortDirection={sortDirection}
+      exporting={exporting}
+      secretaryImportFile={secretaryImportFile}
       visibleAssignments={visibleAssignments}
       availableSedes={availableSedes}
       pendingCount={pendingCount}
@@ -539,6 +641,15 @@ function App() {
       setSelectedFile={setSelectedFile}
       setAdminSedeFilter={setAdminSedeFilter}
       setAdminStatusFilter={setAdminStatusFilter}
+      onSortCriterionChange={setSortCriterion}
+      onSortDirectionChange={() =>
+        setSortDirection((current) => (current === "asc" ? "desc" : "asc"))
+      }
+      onExportAll={() => void exportAssignments()}
+      onExportSeat={() => void exportAssignments(adminSedeFilter)}
+      setSecretaryImportFile={setSecretaryImportFile}
+      onImportSecretaryFile={importSecretaryFile}
+      onDownloadSecretaryTemplate={downloadSecretaryTemplate}
       setResetConfirmation={setResetConfirmation}
       setSpreadsheetError={setSpreadsheetError}
       setReopenAssignment={setReopenAssignment}
@@ -569,6 +680,8 @@ function App() {
       approvedCount={approvedCount}
       visibleAssignments={visibleAssignments}
       secretaryStatusFilter={secretaryStatusFilter}
+      sortCriterion={sortCriterion}
+      sortDirection={sortDirection}
       busy={busy}
       error={error}
       feedback={feedback}
@@ -576,6 +689,10 @@ function App() {
       observation={observation}
       onSignOut={signOut}
       onStatusChange={setSecretaryStatusFilter}
+      onSortCriterionChange={setSortCriterion}
+      onSortDirectionChange={() =>
+        setSortDirection((current) => (current === "asc" ? "desc" : "asc"))
+      }
       onReview={beginAssignmentReview}
       onSaveReview={saveReview}
       onObservationChange={setObservation}
