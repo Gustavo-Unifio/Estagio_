@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSpreadsheet } from "../server/spreadsheet";
+import { parseSpreadsheet } from "../server/spreadsheet.js";
 
 function csv(content: string) {
   return Buffer.from(content, "utf8");

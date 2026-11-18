@@ -1,6 +1,6 @@
-import { app } from "./app";
-import { cleanupExpiredSessions } from "./auth";
-import { prisma } from "./db";
+import { app } from "./app.js";
+import { cleanupExpiredSessions } from "./auth.js";
+import { prisma } from "./db.js";
 
 // Mantém o listener somente no processo de desenvolvimento local.
 const port = Number(process.env.API_PORT ?? 3001);

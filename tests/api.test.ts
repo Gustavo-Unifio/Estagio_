@@ -2,9 +2,9 @@ import { hash } from "bcryptjs";
 import * as XLSX from "@e965/xlsx";
 import request from "supertest";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { cookieName, createSession } from "../server/auth";
-import { app } from "../server/app";
-import { prisma } from "../server/db";
+import { cookieName, createSession } from "../server/auth.js";
+import { app } from "../server/app.js";
+import { prisma } from "../server/db.js";
 
 if (!process.env.TEST_DATABASE_URL) {
   throw new Error(

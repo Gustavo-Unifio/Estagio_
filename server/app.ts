@@ -1,11 +1,11 @@
 import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
-import { errorHandler } from "./errors";
-import adminRouter from "./routes/admin";
-import authRouter from "./routes/auth";
-import secretariaRouter from "./routes/secretaria";
-import { isAllowedRequestOrigin } from "./utils";
+import { errorHandler } from "./errors.js";
+import adminRouter from "./routes/admin.js";
+import authRouter from "./routes/auth.js";
+import secretariaRouter from "./routes/secretaria.js";
+import { isAllowedRequestOrigin } from "./utils.js";
 
 // Monta a aplicação Express sem iniciar o servidor HTTP.
 export const app = express();

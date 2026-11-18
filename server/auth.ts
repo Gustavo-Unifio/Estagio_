@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
-import { prisma } from "./db";
+import { prisma } from "./db.js";
 
 export type Perfil = "ADMIN" | "SECRETARIA";
 

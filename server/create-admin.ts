@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { hash } from "bcryptjs";
-import { prisma } from "./db";
+import { prisma } from "./db.js";
 
 // Valida as credenciais do ambiente e cria a conta administrativa inicial.
 async function main() {

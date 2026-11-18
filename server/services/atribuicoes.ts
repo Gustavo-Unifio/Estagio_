@@ -1,6 +1,6 @@
-import { prisma } from "../db";
-import type { RequisicaoAutenticada } from "../auth";
-import { getAuthenticatedUser } from "../utils";
+import { prisma } from "../db.js";
+import type { RequisicaoAutenticada } from "../auth.js";
+import { getAuthenticatedUser } from "../utils.js";
 
 // Lista atribuições do administrador ou restringe os resultados à sede da secretaria.
 export async function listAssignmentsForUser(req: RequisicaoAutenticada) {

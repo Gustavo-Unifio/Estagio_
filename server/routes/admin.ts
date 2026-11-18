@@ -6,9 +6,9 @@ import {
   authenticate,
   requireRole,
   type RequisicaoAutenticada,
-} from "../auth";
-import { prisma } from "../db";
-import { ApiError } from "../errors";
+} from "../auth.js";
+import { prisma } from "../db.js";
+import { ApiError } from "../errors.js";
 import {
   administratorIdSchema,
   assignmentIdSchema,
@@ -19,13 +19,13 @@ import {
   secretaryIdSchema,
   updateAdministratorSchema,
   updateSecretarySchema,
-} from "../schemas";
-import { createAssignmentsWorkbook, parseSpreadsheet } from "../spreadsheet";
+} from "../schemas.js";
+import { createAssignmentsWorkbook, parseSpreadsheet } from "../spreadsheet.js";
 import {
   parseSecretarySpreadsheet,
   type LinhaSecretariaImportada,
-} from "../secretary-spreadsheet";
-import { getAuthenticatedUser, parseSchema } from "../utils";
+} from "../secretary-spreadsheet.js";
+import { getAuthenticatedUser, parseSchema } from "../utils.js";
 
 const router = express.Router();
 const maxFileSize = 5 * 1024 * 1024;

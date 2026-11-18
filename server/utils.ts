@@ -1,5 +1,5 @@
-import type { RequisicaoAutenticada } from "./auth";
-import { ApiError } from "./errors";
+import type { RequisicaoAutenticada } from "./auth.js";
+import { ApiError } from "./errors.js";
 import type { z } from "zod";
 
 // Valida dados com Zod e retorna a primeira mensagem de erro ao cliente.

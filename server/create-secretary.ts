@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { hash } from "bcryptjs";
-import { prisma } from "./db";
+import { prisma } from "./db.js";
 
 // Lê uma variável obrigatória e rejeita valores ausentes.
 function requiredValue(name: string) {

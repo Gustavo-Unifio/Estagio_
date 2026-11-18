@@ -7,12 +7,12 @@ import {
   createSession,
   writeSessionCookie,
   type RequisicaoAutenticada,
-} from "../auth";
-import { prisma } from "../db";
-import { ApiError } from "../errors";
-import { loginSchema } from "../schemas";
-import { listAssignmentsForUser } from "../services/atribuicoes";
-import { getAuthenticatedUser, parseSchema } from "../utils";
+} from "../auth.js";
+import { prisma } from "../db.js";
+import { ApiError } from "../errors.js";
+import { loginSchema } from "../schemas.js";
+import { listAssignmentsForUser } from "../services/atribuicoes.js";
+import { getAuthenticatedUser, parseSchema } from "../utils.js";
 
 const router = express.Router();
 

@@ -3,11 +3,11 @@ import {
   authenticate,
   requireRole,
   type RequisicaoAutenticada,
-} from "../auth";
-import { prisma } from "../db";
-import { ApiError } from "../errors";
-import { assignmentIdSchema, validationSchema } from "../schemas";
-import { getAuthenticatedUser, parseSchema } from "../utils";
+} from "../auth.js";
+import { prisma } from "../db.js";
+import { ApiError } from "../errors.js";
+import { assignmentIdSchema, validationSchema } from "../schemas.js";
+import { getAuthenticatedUser, parseSchema } from "../utils.js";
 
 const router = express.Router();
 

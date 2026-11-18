@@ -2,7 +2,7 @@ import * as XLSX from "@e965/xlsx";
 import * as codepages from "@e965/xlsx/dist/cpexcel";
 import { parse as parseCsv } from "csv-parse/sync";
 import { extname } from "node:path";
-import { normalizeColumnHeader } from "./spreadsheet";
+import { normalizeColumnHeader } from "./spreadsheet.js";
 
 export type LinhaSecretariaImportada = {
   linha: number;
