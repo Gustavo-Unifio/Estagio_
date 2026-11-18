@@ -10,6 +10,7 @@ import { isAllowedRequestOrigin } from "./utils";
 // Monta a aplicação Express sem iniciar o servidor HTTP.
 export const app = express();
 
+app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(helmet());
 // Impede solicitações mutáveis vindas de origens não autorizadas.

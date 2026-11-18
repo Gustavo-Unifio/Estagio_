@@ -2,6 +2,7 @@ import { app } from "./app";
 import { cleanupExpiredSessions } from "./auth";
 import { prisma } from "./db";
 
+// Mantém o listener somente no processo de desenvolvimento local.
 const port = Number(process.env.API_PORT ?? 3001);
 const sessionCleanupInterval = setInterval(() => {
   void cleanupExpiredSessions();

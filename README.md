@@ -1,13 +1,13 @@
 # Atribuição e validação de carga horária docente
 
-Aplicação web com React, TypeScript, Express, Prisma e SQLite. A interface segue as referências de tipografia, paleta e clareza do [Guia de estilo do CPS](https://cps.sp.gov.br/guia-estilo/index.php).
+A aplicação usa React, TypeScript, Express, Prisma e Postgres. A interface segue as referências de tipografia, paleta e clareza do [Guia de estilo do CPS](https://cps.sp.gov.br/guia-estilo/index.php).
 
 ## Requisitos
 
 - Node.js 20.19+ ou 22.12+
 - npm
 
-## Configuração inicial no Windows
+## Configuração local no Windows
 
 No PowerShell, na pasta do projeto:
 
@@ -16,19 +16,32 @@ npm install
 Copy-Item .env.example .env
 ```
 
-Edite `.env` e preencha `ADMIN_EMAIL` e `ADMIN_PASSWORD` com o e-mail administrativo e uma senha exclusiva de pelo menos 12 caracteres. Não compartilhe nem versiona esse arquivo.
+Edite `.env` localmente com as URLs do banco Postgres e configure `APP_ORIGIN` e `SESSION_COOKIE_SECURE=false` para o frontend local. Nunca versione esse arquivo.
 
-Inicialize o banco e crie a primeira conta administrativa:
+Para criar ou atualizar o banco local de desenvolvimento, configure as variáveis apenas na sessão atual do PowerShell e execute os comandos Prisma:
 
 ```powershell
+$env:DATABASE_URL="postgresql://usuario:senha@host:5432/aplicacao"
+$env:DIRECT_URL=$env:DATABASE_URL
+npx prisma db push
 npm run db:generate
-npm run db:push
+```
+
+A conta administrativa inicial pode ser criada a partir de variáveis temporárias:
+
+```powershell
+$env:ADMIN_EMAIL="administrador@exemplo.com"
+$env:ADMIN_PASSWORD="senha-exclusiva-com-12-ou-mais"
 npm run admin:create
 ```
 
-`npm run admin:create` cria uma conta uma única vez e não altera senhas existentes. Depois de criar o admin, remova os valores de `ADMIN_EMAIL` e `ADMIN_PASSWORD` do `.env`; a conta continua cadastrada no banco.
+`npm run admin:create` cria a conta uma única vez e não altera senhas existentes. Remova as variáveis da sessão ao terminar:
 
-O painel do admin cadastra secretarias para o uso normal. Para criar uma conta de secretaria a partir do PowerShell, sem cadastrar uma senha no arquivo `.env`, configure `SECRETARY_EMAIL`, `SECRETARY_PASSWORD`, `SECRETARY_NAME` e `SECRETARY_SEAT` somente na sessão do terminal e execute `npm run secretary:create`. Senhas devem ser compartilhadas por um canal privado.
+```powershell
+Remove-Item Env:ADMIN_EMAIL,Env:ADMIN_PASSWORD,Env:DATABASE_URL,Env:DIRECT_URL
+```
+
+Para criar uma secretaria local sem armazenar a senha no arquivo `.env`, configure `SECRETARY_EMAIL`, `SECRETARY_PASSWORD`, `SECRETARY_NAME` e `SECRETARY_SEAT` somente na sessão do PowerShell e execute `npm run secretary:create`.
 
 Inicie o frontend e a API:
 
@@ -64,12 +77,53 @@ Cada arquivo válido **substitui a base ativa em uma transação**. Cabeçalho, 
 - O painel administrativo permite combinar filtros de sede e status; a secretaria pode filtrar as atribuições da própria sede por status.
 - “Esvaziar base” remove as atribuições ativas, mas preserva contas e histórico de importação.
 
-## Banco e comandos
+## Banco Postgres e implantação na Vercel
 
-O schema em `prisma/schema.prisma` contém `Professores_Atribuicoes`, `Permissoes_Sede`, contas, sessões, histórico de validações e histórico de importação. Para atualizar um banco existente após alterações no schema, execute `npm run db:generate` e `npm run db:push`; não use reset, pois isso apagaria os dados. O arquivo SQLite local usa a URL configurada em `DATABASE_URL`.
+1. Crie um banco Postgres hospedado e guarde separadamente a URL principal e a URL direta. Quando o provedor não oferece pooling, `DIRECT_URL` pode ter o mesmo valor de `DATABASE_URL`.
+2. Defina as variáveis somente na sessão do PowerShell para aplicar o schema no banco de produção:
+
+```powershell
+$env:DATABASE_URL="postgresql://usuario:senha@host-pooled:5432/aplicacao"
+$env:DIRECT_URL="postgresql://usuario:senha@host-direto:5432/aplicacao"
+npx prisma db push
+npm run db:generate
+npx prisma generate
+```
+
+Depois crie o administrador inicial:
+
+```powershell
+$env:ADMIN_EMAIL="administrador@exemplo.com"
+$env:ADMIN_PASSWORD="senha-exclusiva-com-12-ou-mais"
+npm run admin:create
+```
+
+Remova as variáveis sensíveis da sessão:
+
+```powershell
+Remove-Item Env:ADMIN_EMAIL,Env:ADMIN_PASSWORD,Env:DATABASE_URL,Env:DIRECT_URL
+```
+
+3. No painel da Vercel, configure `DATABASE_URL`, `DIRECT_URL`, `APP_ORIGIN=https://seu-dominio.vercel.app` e `SESSION_COOKIE_SECURE=true`. `APP_ORIGIN` deve ser a URL HTTPS exata do site.
+4. Faça o redeploy. O `postinstall` executará `prisma generate`, o frontend será compilado para `dist` e as rotas `/api/*` serão encaminhadas para `api/index.ts`.
+
+## Banco de testes
+
+Os testes exigem um banco Postgres separado. Defina `TEST_DATABASE_URL` apenas na sessão do PowerShell e execute:
+
+```powershell
+$env:TEST_DATABASE_URL="postgresql://usuario:senha@host:5432/aplicacao_testes"
+npm test
+```
+
+O script de testes valida a URL, aplica o schema somente nesse banco e impede que `TEST_DATABASE_URL` seja igual à `DATABASE_URL` configurada na sessão. Nunca execute os testes contra o banco de produção.
+
+## Comandos úteis
 
 ```powershell
 npm run build       # verifica tipos e compila frontend/API
+npm test            # exige TEST_DATABASE_URL
+npm run db:push     # usa DATABASE_URL da sessão ou do ambiente
 npm run db:studio   # inspeciona o banco local
 ```
 

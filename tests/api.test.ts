@@ -6,8 +6,21 @@ import { cookieName, createSession } from "../server/auth";
 import { app } from "../server/app";
 import { prisma } from "../server/db";
 
-if (process.env.DATABASE_URL !== "file:./test.db") {
-  throw new Error("Os testes de API exigem DATABASE_URL=file:./test.db.");
+if (!process.env.TEST_DATABASE_URL) {
+  throw new Error(
+    "Defina TEST_DATABASE_URL com a URL de um banco Postgres exclusivo para testes.",
+  );
+}
+if (
+  !process.env.DATABASE_URL ||
+  process.env.DATABASE_URL !== process.env.TEST_DATABASE_URL
+) {
+  throw new Error(
+    "Os testes exigem DATABASE_URL igual ao TEST_DATABASE_URL exclusivo para testes.",
+  );
+}
+if (!/^postgres(ql)?:\/\//i.test(process.env.TEST_DATABASE_URL)) {
+  throw new Error("Os testes exigem um banco Postgres.");
 }
 
 const password = "senha-de-teste-123";

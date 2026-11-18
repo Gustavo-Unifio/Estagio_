@@ -4,9 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "concurrently -k -n api,web -c blue,green \"tsx watch server/index.ts\" \"vite --host 127.0.0.1\"",
     "build": "tsc -b && tsc -p tsconfig.server.json && vite build",
-    "test": "set DATABASE_URL=file:./test.db&& prisma db push --skip-generate && vitest run",
+    "test": "node scripts/run-tests.mjs",
     "preview": "vite preview",
     "admin:create": "tsx server/create-admin.ts",
     "secretary:create": "tsx server/create-secretary.ts",
